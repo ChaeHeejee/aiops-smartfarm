@@ -22,24 +22,32 @@ class TomatoReportService:
 
         payload = self._build_report_payload(analysis_result)
         client = self._build_client()
-        response = client.responses.create(
+        response = client.chat.completions.create(
             model=self.model,
-            instructions=(
-                "You are an MLOps analyst for a tomato farm monitoring system. "
-                "Write the report in Korean. "
-                "Use short, clear markdown with exactly these sections: "
-                "1. ML 성능, 2. 히스토리 데이터 요약, 3. 운영 판단 및 권고. "
-                "In section 3, decide whether retraining is appropriate now or whether model methodology changes are needed. "
-                "Base your answer only on the provided analysis summary. "
-                "If evidence is weak, say so explicitly."
-            ),
-            input=json.dumps(payload, ensure_ascii=False, indent=2),
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an MLOps analyst for a tomato farm monitoring system. "
+                        "Write the report in Korean. "
+                        "Use short, clear markdown with exactly these sections: "
+                        "1. ML 성능, 2. 히스토리 데이터 요약, 3. 운영 판단 및 권고. "
+                        "In section 3, decide whether retraining is appropriate now or whether model methodology changes are needed. "
+                        "Base your answer only on the provided analysis summary. "
+                        "If evidence is weak, say so explicitly."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(payload, ensure_ascii=False, indent=2),
+                },
+            ],
         )
 
         return {
             "model": self.model,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "report_markdown": response.output_text,
+            "report_markdown": response.choices[0].message.content,
         }
 
     def _build_client(self):
