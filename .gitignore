@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Environment — never commit actual secrets
+.env
+.venv
+venv/
+lstm/
+
+# macOS
+.DS_Store
+
+# Runtime / generated files
+tom_aiops/uploads/
+tom_aiops/uploaded/
+tom_aiops/monitoring/
+tom_aiops/_combined_train_tmp.csv
+
+# Model artifacts (binary — regenerate with train_target())
+tom_aiops/artifacts/**/*.keras
+tom_aiops/artifacts/**/*.pkl
+
+# Jupyter
+.ipynb_checkpoints/

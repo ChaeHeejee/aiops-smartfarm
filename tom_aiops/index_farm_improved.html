@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <title>스마트팜 AIOps - 농가 생육 및 출하량 예측</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background-color: #f0f2f5;
+            color: #334155;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 30px 20px; }
+
+        .panel {
+            background: #ffffff;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        /* ══════════════
+           ① 헤더
+           ══════════════ */
+        .site-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 28px;
+            margin-bottom: 20px;
+        }
+        .site-header h1 {
+            font-size: 20px; font-weight: 700; color: #0f172a;
+            display: flex; align-items: center; gap: 9px; margin-bottom: 2px;
+        }
+        .site-header .subtitle { font-size: 12px; color: #94a3b8; }
+
+        /* CSV 업로드 버튼 */
+        .btn-upload-csv {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 8px 16px; border-radius: 7px; cursor: pointer;
+            font-size: 13px; font-weight: 600; font-family: inherit;
+            background: #f0fdf4; color: #166534;
+            border: 1.5px solid #bbf7d0;
+            transition: background 0.18s, border-color 0.18s;
+            white-space: nowrap;
+        }
+        .btn-upload-csv:hover { background: #dcfce7; border-color: #86efac; }
+        .btn-report {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 8px 16px; border-radius: 7px; cursor: pointer;
+            font-size: 13px; font-weight: 600; font-family: inherit;
+            background: #eff6ff; color: #1d4ed8;
+            border: 1.5px solid #bfdbfe;
+            transition: background 0.18s, border-color 0.18s, opacity 0.18s;
+            white-space: nowrap;
+        }
+        .btn-report:hover:not(:disabled) { background: #dbeafe; border-color: #93c5fd; }
+        .btn-report:disabled {
+            cursor: not-allowed;
+            opacity: 0.55;
+        }
+        #fileInput { display: none; }
+
+        /* ══════════════════════════════════
+           ② 환경 현황 패널
+           ══════════════════════════════════ */
+        .env-panel-header {
+            padding: 16px 28px 0;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .env-panel-header h3 {
+            font-size: 13px; font-weight: 700; color: #1e293b;
+            display: flex; align-items: center; gap: 7px;
+        }
+        .env-live-dot {
+            width: 7px; height: 7px; border-radius: 50%; background: #22c55e;
+            box-shadow: 0 0 0 3px rgba(34,197,94,0.2);
+            animation: pulse 2s infinite; flex-shrink: 0;
+        }
+        @keyframes pulse {
+            0%,100% { box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+            50%      { box-shadow: 0 0 0 6px rgba(34,197,94,0.07); }
+        }
+        .env-two-grid {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 14px; padding: 14px 28px 20px;
+        }
+        .env-big-card {
+            display: flex; align-items: center; gap: 18px;
+            padding: 18px 22px; border-radius: 10px; border: 1px solid transparent;
+        }
+        .env-big-card.temp  { background: linear-gradient(135deg,#fff7ed,#ffedd5); border-color: #fed7aa; }
+        .env-big-card.humid { background: linear-gradient(135deg,#eff6ff,#dbeafe); border-color: #bfdbfe; }
+        .env-big-icon {
+            width: 52px; height: 52px; border-radius: 13px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 22px; flex-shrink: 0;
+        }
+        .env-big-icon.temp  { background: rgba(234,88,12,0.11); color: #c2410c; }
+        .env-big-icon.humid { background: rgba(29,78,216,0.11);  color: #1d4ed8; }
+        .env-big-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+        .env-big-value { font-size: 34px; font-weight: 800; line-height: 1.05; color: #0f172a; margin: 1px 0; }
+        .env-big-value sup { font-size: 14px; font-weight: 600; color: #94a3b8; vertical-align: super; margin-left: 2px; }
+        .env-big-trend {
+            font-size: 11px; font-weight: 600;
+            display: flex; align-items: center; gap: 3px; margin-top: 3px;
+        }
+        .env-big-trend.up     { color: #ef4444; }
+        .env-big-trend.down   { color: #2563eb; }
+        .env-big-trend.stable { color: #94a3b8; }
+
+        /* ══════════════════════════════════
+           ③ AIOps 패널
+           ══════════════════════════════════ */
+        .aiops-header {
+            padding: 16px 28px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex; justify-content: space-between; align-items: center;
+            gap: 12px; flex-wrap: wrap;
+        }
+        .aiops-title-group {
+            display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        }
+        .aiops-title-group h2 {
+            font-size: 15px; font-weight: 700; color: #0f172a;
+            display: flex; align-items: center; gap: 7px; white-space: nowrap;
+        }
+
+        /* 제목 옆 인라인 드롭다운 */
+        .var-select-inline {
+            padding: 6px 32px 6px 12px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            background: #fafafa;
+            font-size: 14px;
+            font-family: 'Pretendard', inherit;
+            font-weight: 500;
+            color: #1e293b;
+            cursor: pointer;
+            appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            transition: border-color 0.18s, box-shadow 0.18s;
+            min-width: 150px;
+        }
+        .var-select-inline:focus {
+            outline: none;
+            border-color: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22,163,74,0.1);
+        }
+
+        .aiops-status { display: flex; gap: 8px; flex-wrap: wrap; }
+        .aiops-status-item {
+            text-align: right; padding: 6px 12px;
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 7px;
+        }
+        .aiops-status-value { font-size: 14px; font-weight: 700; color: #1e293b; }
+        .aiops-status-label { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+
+        .aiops-content { padding: 18px 28px 22px; }
+        .aiops-grid {
+            display: grid; grid-template-columns: repeat(3,1fr); gap: 14px;
+        }
+        .chart-wrapper {
+            display: flex; flex-direction: column;
+            border: 1px solid #f1f5f9; border-radius: 8px; overflow: hidden;
+        }
+        .chart-label {
+            padding: 8px 13px; font-size: 10px; font-weight: 700;
+            color: #64748b; background: #f8fafc; border-bottom: 1px solid #f1f5f9;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .chart-container { position: relative; height: 220px; background: #fff; padding: 10px; }
+
+        /* ── 내부 환경 stat 패널 ── */
+        .env-stat-panel {
+            display: flex; flex-direction: column; gap: 0;
+            height: 220px; justify-content: center;
+            padding: 8px 16px;
+        }
+        .env-stat-row {
+            display: flex; align-items: center; gap: 14px;
+            padding: 14px 0; flex: 1;
+        }
+        .env-stat-row + .env-stat-row {
+            border-top: 1px solid #f1f5f9;
+        }
+        .env-stat-icon {
+            width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+        }
+        .env-stat-icon.temp  { background: #fff1e6; color: #c2410c; }
+        .env-stat-icon.humid { background: #eff6ff; color: #1d4ed8; }
+        .env-stat-body { flex: 1; min-width: 0; }
+        .env-stat-label {
+            font-size: 11px; font-weight: 700; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 2px;
+        }
+        .env-stat-value {
+            font-size: 30px; font-weight: 800; color: #0f172a;
+            line-height: 1; margin-bottom: 8px;
+        }
+        .env-stat-unit { font-size: 14px; font-weight: 500; color: #94a3b8; margin-left: 2px; }
+        .env-stat-bar-wrap {
+            background: #f1f5f9; border-radius: 4px; height: 6px;
+            overflow: hidden; margin-bottom: 4px;
+        }
+        .env-stat-bar {
+            height: 100%; border-radius: 4px; transition: width 0.6s ease;
+        }
+        .env-stat-bar.temp  { background: linear-gradient(90deg,#fb923c,#f97316); }
+        .env-stat-bar.humid { background: linear-gradient(90deg,#60a5fa,#2563eb); }
+        .env-stat-range {
+            font-size: 10px; color: #cbd5e1;
+        }
+
+        /* ══════════════
+           예측 결과
+           ══════════════ */
+        .section-header { padding: 16px 28px; border-bottom: 1px solid #e2e8f0; }
+        .section-header h2 {
+            font-size: 14px; font-weight: 700; color: #1e293b;
+            display: flex; align-items: center; gap: 7px;
+        }
+        .result-wrapper { padding: 20px 28px; }
+        .result-card {
+            background: #fff; border: 1px solid #e2e8f0;
+            padding: 20px; border-radius: 8px;
+        }
+        .result-title {
+            font-size: 14px; font-weight: 700; color: #0f172a;
+            margin-bottom: 10px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;
+        }
+        .result-image { max-width: 100%; height: auto; border-radius: 6px; border: 1px solid #e2e8f0; margin-top: 12px; }
+        .result-text  { color: #475569; font-size: 13px; line-height: 1.65; }
+        .comparison-section {
+            display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr));
+            gap: 12px; margin-top: 12px;
+        }
+        .comparison-card {
+            background: #f8fafc; padding: 13px; border-radius: 7px;
+            border: 1px solid #e2e8f0; border-left: 3px solid #cbd5e1;
+        }
+        .comparison-card.success { border-left-color: #22c55e; }
+        .comparison-card.danger  { border-left-color: #ef4444; }
+        .comparison-label    { font-size: 11px; font-weight: 600; color: #64748b; margin-bottom: 5px; }
+        .comparison-value    { font-size: 20px; font-weight: 700; color: #0f172a; }
+        .comparison-subtitle { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+        /* 업로드 상태 */
+        #uploadStatus { margin-bottom: 12px; display: none; }
+        .status-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .alert {
+            padding: 10px 14px; border-radius: 7px;
+            font-size: 13px; display: flex; align-items: center; gap: 7px;
+        }
+        .alert.success { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+        .alert.error   { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        .alert.warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+        .loading { display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+                   color: #64748b; font-size: 13px; background: #f8fafc;
+                   border: 1px solid #e2e8f0; border-radius: 7px; }
+        .spinner {
+            border: 2px solid #f1f5f9; border-top: 2px solid #94a3b8;
+            border-radius: 50%; width: 16px; height: 16px; flex-shrink: 0;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* ══════════════
+           RMSE 패널
+           ══════════════ */
+        .rmse-body {
+            padding: 20px 28px 24px;
+            display: flex; flex-direction: column; gap: 16px;
+        }
+        .rmse-var-label {
+            font-size: 12px; font-weight: 700; color: #94a3b8;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .rmse-main {
+            display: flex; align-items: flex-end; gap: 6px;
+            margin: 2px 0 6px;
+        }
+        .rmse-value {
+            font-size: 48px; font-weight: 800; line-height: 1; color: #0f172a;
+        }
+        .rmse-unit {
+            font-size: 16px; font-weight: 600; color: #94a3b8;
+            padding-bottom: 6px;
+        }
+        .rmse-desc {
+            font-size: 12px; color: #64748b; margin-bottom: 14px;
+        }
+        /* 평가 게이지 바 */
+        .rmse-gauge-wrap {
+            background: #f1f5f9; border-radius: 6px; height: 8px;
+            overflow: hidden; margin-bottom: 6px;
+        }
+        .rmse-gauge-bar {
+            height: 100%; border-radius: 6px;
+            transition: width 0.6s ease;
+        }
+        .rmse-gauge-bar.good   { background: linear-gradient(90deg,#22c55e,#86efac); }
+        .rmse-gauge-bar.ok     { background: linear-gradient(90deg,#f59e0b,#fcd34d); }
+        .rmse-gauge-bar.poor   { background: linear-gradient(90deg,#ef4444,#fca5a5); }
+        .rmse-gauge-labels {
+            display: flex; justify-content: space-between;
+            font-size: 10px; color: #94a3b8;
+        }
+        .rmse-retrain-box {
+            margin-top: 14px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            display: none;
+        }
+        .rmse-retrain-title {
+            font-size: 11px; font-weight: 700; color: #92400e;
+            text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px;
+        }
+        .rmse-retrain-main {
+            display: flex; align-items: baseline; gap: 6px; margin-bottom: 8px;
+        }
+        .rmse-retrain-value {
+            font-size: 28px; font-weight: 800; color: #78350f; line-height: 1;
+        }
+        .rmse-retrain-unit {
+            font-size: 13px; font-weight: 600; color: #a16207;
+        }
+        .rmse-retrain-desc {
+            font-size: 12px; color: #92400e; line-height: 1.6;
+        }
+        /* 이력 테이블 */
+        .rmse-history-title {
+            font-size: 11px; font-weight: 700; color: #64748b;
+            text-transform: uppercase; letter-spacing: 0.4px; margin-top: 4px;
+        }
+        .rmse-history-table {
+            width: 100%; border-collapse: collapse; margin-top: 8px;
+        }
+        .rmse-history-table th {
+            background: #f8fafc; padding: 8px 12px; text-align: left;
+            font-size: 11px; font-weight: 600; color: #64748b;
+            border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.3px;
+        }
+        .rmse-history-table td {
+            padding: 9px 12px; border-bottom: 1px solid #f1f5f9;
+            font-size: 13px; color: #334155;
+        }
+        .rmse-history-table tr:last-child td { border-bottom: none; }
+        .rmse-badge {
+            display: inline-block; padding: 2px 8px; border-radius: 4px;
+            font-size: 11px; font-weight: 600;
+        }
+        .rmse-badge.good { background: #dcfce7; color: #166534; }
+        .rmse-badge.ok   { background: #fef3c7; color: #92400e; }
+        .rmse-badge.poor { background: #fee2e2; color: #991b1b; }
+
+        .section-header.with-action {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .report-body {
+            padding: 20px 28px 24px;
+        }
+        .report-placeholder {
+            color: #94a3b8;
+            font-size: 13px;
+        }
+        .report-meta {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 12px;
+        }
+        .report-output {
+            white-space: pre-wrap;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 18px;
+            font-size: 13px;
+            line-height: 1.75;
+            color: #334155;
+        }
+
+        @media (max-width: 900px) {
+            .aiops-grid   { grid-template-columns: 1fr; }
+            .env-two-grid { grid-template-columns: 1fr; }
+            .aiops-header { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ① 헤더 -->
+    <header class="panel site-header">
+        <div>
+            <h1><i class="fas fa-leaf" style="color:#16a34a;"></i> 스마트팜 AIOps</h1>
+            <p class="subtitle">AI 기반 생육 및 출하량 예측 시스템</p>
+        </div>
+        <button class="btn-upload-csv" onclick="document.getElementById('fileInput').click()">
+            <i class="fas fa-upload"></i> CSV 업로드
+        </button>
+        <input type="file" id="fileInput" accept=".csv" onchange="handleFileUpload(event)">
+    </header>
+
+    <!-- 업로드 상태 메시지 -->
+    <div id="uploadStatus"></div>
+
+    <!-- ③ AIOps 모니터링: 제목 옆 드롭다운 -->
+    <div class="panel">
+        <div class="aiops-header">
+            <div class="aiops-title-group">
+                <h2>
+                    <i class="fas fa-microchip" style="color:#64748b;"></i>
+                    AIOps 실시간 모니터링
+                </h2>
+                <select id="variableSelect" class="var-select-inline" onchange="onVariableChange(this.value)">
+                    <optgroup label="🌱 생육 지표">
+                        <option value="초장" selected>초장</option>
+                        <option value="생장길이">생장길이</option>
+                        <option value="엽수">엽수</option>
+                        <option value="엽장">엽장</option>
+                        <option value="엽폭">엽폭</option>
+                        <option value="줄기굵기">줄기굵기</option>
+                    </optgroup>
+                    <optgroup label="🌸 화방 지표">
+                        <option value="화방높이">화방높이</option>
+                        <option value="화방번호">화방번호</option>
+                        <option value="화방별꽃수">화방별꽃수</option>
+                        <option value="화방별개화수">화방별개화수</option>
+                        <option value="화방별착과수">화방별착과수</option>
+                    </optgroup>
+                    <optgroup label="🌡️ 환경 지표">
+                        <option value="주간평균_온도_외부">주간평균_온도_외부</option>
+                        <option value="주간평균_일사량_외부">주간평균_일사량_외부</option>
+                        <option value="주간평균_온도_내부">주간평균_온도_내부</option>
+                        <option value="주간평균_상대습도_내부">주간평균_상대습도_내부</option>
+                    </optgroup>
+                </select>
+            </div>
+            <div class="aiops-status">
+                <div class="aiops-status-item">
+                    <div class="aiops-status-value" id="predictionsCount">—</div>
+                    <div class="aiops-status-label">모델 정확도</div>
+                </div>
+                <div class="aiops-status-item">
+                    <div class="aiops-status-value" id="statusTempIn">24.5°C</div>
+                    <div class="aiops-status-label">내부 온도</div>
+                </div>
+                <div class="aiops-status-item">
+                    <div class="aiops-status-value" id="statusHumidIn">68%</div>
+                    <div class="aiops-status-label">내부 습도</div>
+                </div>
+            </div>
+        </div>
+        <div class="aiops-content">
+            <div class="aiops-grid">
+                <!-- 1: 출하량 추이 -->
+                <div class="chart-wrapper">
+                    <div class="chart-label">
+                        <i class="fas fa-chart-line" style="color:#2563eb;"></i>주간 출하량 추이
+                    </div>
+                    <div class="chart-container"><canvas id="yieldChart"></canvas></div>
+                </div>
+
+                <!-- 2: 예측 vs 실측 편차 (기존 3번 → 2번으로) -->
+                <div class="chart-wrapper">
+                    <div class="chart-label">
+                        <i class="fas fa-arrows-left-right" style="color:#7c3aed;"></i>
+                        예측 vs 실측 편차
+                        <span style="font-weight:400;color:#94a3b8;font-size:9px;margin-left:2px;">(+ 과다 / − 과소)</span>
+                    </div>
+                    <div class="chart-container"><canvas id="deviationChart"></canvas></div>
+                </div>
+
+                <!-- 3: 내부 온도 & 습도 (새로 추가) -->
+                <div class="chart-wrapper">
+                    <div class="chart-label">
+                        <i class="fas fa-house-chimney" style="color:#f97316;"></i>
+                        현재 내부 환경
+                        <span class="env-live-dot" style="margin-left:6px;display:inline-block;"></span>
+                    </div>
+                    <div class="env-stat-panel">
+                        <!-- 내부 온도 -->
+                        <div class="env-stat-row temp">
+                            <div class="env-stat-icon temp">
+                                <i class="fas fa-temperature-high"></i>
+                            </div>
+                            <div class="env-stat-body">
+                                <div class="env-stat-label">내부 온도</div>
+                                <div class="env-stat-value">
+                                    <span id="panelTempVal">24.5</span>
+                                    <span class="env-stat-unit">°C</span>
+                                </div>
+                                <div class="env-stat-bar-wrap">
+                                    <div class="env-stat-bar temp" id="panelTempBar" style="width:49%"></div>
+                                </div>
+                                <div class="env-stat-range">0°C <span style="float:right">50°C</span></div>
+                            </div>
+                        </div>
+                        <!-- 내부 습도 -->
+                        <div class="env-stat-row humid">
+                            <div class="env-stat-icon humid">
+                                <i class="fas fa-droplet"></i>
+                            </div>
+                            <div class="env-stat-body">
+                                <div class="env-stat-label">내부 상대습도</div>
+                                <div class="env-stat-value">
+                                    <span id="panelHumidVal">68</span>
+                                    <span class="env-stat-unit">%</span>
+                                </div>
+                                <div class="env-stat-bar-wrap">
+                                    <div class="env-stat-bar humid" id="panelHumidBar" style="width:68%"></div>
+                                </div>
+                                <div class="env-stat-range">0% <span style="float:right">100%</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ④ RMSE 지표 패널 (선택 변수 기준) -->
+    <div class="panel" id="rmseSection">
+        <div class="section-header">
+            <h2>
+                <i class="fas fa-bullseye" style="color:#7c3aed;"></i>
+                RMSE 지표
+                <span id="rmseVarBadge" style="margin-left:7px;font-size:11px;padding:2px 8px;
+                    background:#f5f3ff;color:#5b21b6;border-radius:4px;border:1px solid #ddd6fe;"></span>
+            </h2>
+        </div>
+        <div class="rmse-body">
+            <!-- 현재 RMSE -->
+            <div>
+                <div class="rmse-var-label" id="rmseVarName">변수명</div>
+                <div class="rmse-main">
+                    <div class="rmse-value" id="rmseVal">—</div>
+                    <div class="rmse-unit" id="rmseUnitEl"></div>
+                </div>
+                <div class="rmse-desc">낮을수록 예측 정확도가 높습니다</div>
+                <!-- 게이지 바 -->
+                <div class="rmse-gauge-wrap">
+                    <div class="rmse-gauge-bar good" id="rmseGaugeBar" style="width:0%"></div>
+                </div>
+                <div class="rmse-gauge-labels">
+                    <span>우수</span><span>보통</span><span>개선 필요</span>
+                </div>
+                <div class="rmse-retrain-box" id="retrainRmseBox">
+                    <div class="rmse-retrain-title">재학습 결과</div>
+                    <div class="rmse-retrain-main">
+                        <div class="rmse-retrain-value" id="retrainRmseVal">—</div>
+                        <div class="rmse-retrain-unit" id="retrainRmseUnitEl"></div>
+                    </div>
+                    <div class="rmse-retrain-desc" id="retrainRmseDesc"></div>
+                </div>
+            </div>
+            <!-- 이력 -->
+            <div>
+                <div class="rmse-history-title">업로드 이력</div>
+                <table class="rmse-history-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>변수</th>
+                            <th>RMSE</th>
+                            <th>평가</th>
+                            <th>시각</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rmseHistoryBody">
+                        <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:14px 0;">
+                            아직 업로드 이력이 없습니다.
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel" id="reportSection">
+        <div class="section-header with-action">
+            <h2>
+                <i class="fas fa-file-lines" style="color:#1d4ed8;"></i>
+                AI 리포트
+            </h2>
+            <button id="generateReportBtn" class="btn-report" onclick="generateAiReport()" disabled>
+                <i class="fas fa-wand-magic-sparkles"></i> AI 리포트 생성
+            </button>
+        </div>
+        <div class="report-body">
+            <div id="reportPlaceholder" class="report-placeholder">분석 완료 후 리포트를 생성할 수 있습니다.</div>
+            <div id="reportMeta" class="report-meta" style="display:none;"></div>
+            <div id="reportOutput" class="report-output" style="display:none;"></div>
+        </div>
+    </div>
+
+</div>
+<script>
+let selectedVariable = document.getElementById('variableSelect')?.value || '초장';
+let yieldChart = null, deviationChart = null;
+let predictionCount = 0;
+const UPLOAD_URL = '/api/analyze';
+const REPORT_URL = '/api/report';
+let lastAnalysisResult = null;
+
+// RMSE 이력 (변수별 누적)
+const rmseHistory = [];  // { variable, rmse, unit, time }
+const retrainRmseByVariable = {}; // { [variable]: { retrainedRmse, previousRmse, currentRmse, trainedAt } }
+
+const VAR_UNIT = {
+    '초장':'cm','생장길이':'cm','엽수':'장','엽장':'cm','엽폭':'cm','줄기굵기':'mm',
+    '화방높이':'cm','화방번호':'번','화방별꽃수':'개','화방별개화수':'개','화방별착과수':'개',
+    '주간평균_온도_외부':'°C','주간평균_일사량_외부':'MJ/m²',
+    '주간평균_온도_내부':'°C','주간평균_상대습도_내부':'%'
+};
+
+function onVariableChange(value) {
+    selectedVariable = value;
+    // RMSE 패널은 유지하되 선택 변수 기준으로 최신값 재렌더
+    renderRmsePanel();
+    updateGenerateReportButton();
+    hideStatus();
+}
+
+async function loadSupportedTargets() {
+    const sel = document.getElementById('variableSelect');
+    if (!sel) return;
+    try {
+        const r = await fetch('/api/targets');
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !Array.isArray(data.targets) || data.targets.length === 0) return;
+
+        sel.innerHTML = '';
+        data.targets.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            sel.appendChild(opt);
+        });
+        selectedVariable = data.targets.includes('초장') ? '초장' : data.targets[0];
+        sel.value = selectedVariable;
+    } catch (e) {
+        // keep static options if API unavailable
+    }
+}
+
+async function handleFileUpload(event) {
+    const file = event.target.files[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) {
+        showStatus(`<div class="alert error"><i class="fas fa-circle-exclamation"></i> CSV 파일만 업로드 가능합니다.</div>`);
+        return;
+    }
+    showStatus(`<div class="loading"><div class="spinner"></div><strong>${selectedVariable}</strong> 변수 AI 모델 처리 중...</div>`);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('target_col', selectedVariable);
+    try {
+        const r = await fetch(UPLOAD_URL, { method:'POST', body:fd });
+        const result = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            const msg = result.detail || `HTTP ${r.status}`;
+            throw new Error(msg);
+        }
+        showStatus(buildAnalyzeStatusHtml(result, file.name));
+        applyTomAiopsResult(result);
+        syncRetrainRmseState(result);
+        lastAnalysisResult = result;
+        renderReportPlaceholder('AI 리포트 생성 버튼을 누르면 현재 분석 결과를 바탕으로 리포트를 생성합니다.');
+        updateGenerateReportButton();
+
+        // RMSE 추출 (백엔드 응답 필드명 여러 경우 대응)
+        const rmseVal = result.plot?.rmse ?? result.rmse ?? result.valid_rmse ?? result.comparison_yield?.rmse ?? null;
+        if (rmseVal != null) {
+            rmseHistory.push({
+                variable: selectedVariable,
+                rmse: rmseVal,
+                unit: VAR_UNIT[selectedVariable] || '',
+                time: new Date()
+            });
+            renderRmsePanel();
+        }
+
+        // 서버 이력이 있으면 동기화 (target별)
+        if (Array.isArray(result.rmse_history)) {
+            const synced = result.rmse_history.map(x => ({
+                variable: selectedVariable,
+                rmse: Number(x.rmse),
+                unit: VAR_UNIT[selectedVariable] || '',
+                time: new Date(x.timestamp || Date.now())
+            }));
+            // 기존 변수 히스토리 제거 후 서버값 반영
+            for (let i = rmseHistory.length - 1; i >= 0; i--) {
+                if (rmseHistory[i].variable === selectedVariable) rmseHistory.splice(i, 1);
+            }
+            rmseHistory.push(...synced);
+            renderRmsePanel();
+        }
+
+        predictionCount++;
+        updateStatus();
+    } catch (e) {
+        showStatus(`<div class="alert error"><i class="fas fa-circle-exclamation"></i> 업로드 처리 오류: ${e.message}</div>`);
+    }
+}
+
+async function generateAiReport() {
+    if (!lastAnalysisResult || lastAnalysisResult.target_col !== selectedVariable) {
+        renderReportError('선택한 변수에 대한 최신 분석 결과가 없습니다. 먼저 CSV를 분석해 주세요.');
+        updateGenerateReportButton();
+        return;
+    }
+
+    const btn = document.getElementById('generateReportBtn');
+    btn.disabled = true;
+    renderReportLoading();
+
+    try {
+        const r = await fetch(REPORT_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ analysis_result: lastAnalysisResult })
+        });
+        const result = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            throw new Error(result.detail || `HTTP ${r.status}`);
+        }
+        renderReportResult(result);
+    } catch (e) {
+        renderReportError(`리포트 생성 오류: ${e.message}`);
+    } finally {
+        updateGenerateReportButton();
+    }
+}
+
+function syncRetrainRmseState(result) {
+    const retrainStatus = result.retrain_status;
+    if (retrainStatus?.triggered && retrainStatus.retrained_model) {
+        retrainRmseByVariable[selectedVariable] = {
+            retrainedRmse: Number(retrainStatus.retrained_model.valid_rmse),
+            previousRmse: Number(retrainStatus.previous_rmse),
+            currentRmse: Number(retrainStatus.current_rmse),
+            trainedAt: retrainStatus.retrained_model.trained_at_utc || null
+        };
+        return;
+    }
+    retrainRmseByVariable[selectedVariable] = null;
+}
+
+function buildAnalyzeStatusHtml(result, fallbackFileName) {
+    const fileName = result.saved_filename || fallbackFileName;
+    const sections = [
+        `<div class="alert success"><i class="fas fa-check-circle"></i> [${selectedVariable}] ${fileName} 분석 완료.</div>`
+    ];
+
+    const retrainStatus = result.retrain_status;
+    if (retrainStatus) {
+        const previousRmse = Number(retrainStatus.previous_rmse);
+        const currentRmse = Number(retrainStatus.current_rmse);
+        const retrainedRmse = Number(retrainStatus.retrained_model?.valid_rmse);
+
+        const previousText = Number.isFinite(previousRmse) ? previousRmse.toFixed(4) : '—';
+        const currentText = Number.isFinite(currentRmse) ? currentRmse.toFixed(4) : '—';
+        const retrainedText = Number.isFinite(retrainedRmse) ? retrainedRmse.toFixed(4) : '—';
+        if (retrainStatus.triggered) {
+            sections.push(
+                `<div class="alert warning"><i class="fas fa-rotate"></i> RMSE 개선이 감지되어 <strong>${selectedVariable}</strong> 모델 재학습이 자동으로 실행되었습니다. 이전 RMSE ${previousText}, 현재 RMSE ${currentText}, 재학습 모델 검증 RMSE ${retrainedText}</div>`
+            );
+        } else {
+            const reasonText = retrainStatus.reason === 'no_previous_rmse'
+                ? '이전 RMSE 이력이 없어 자동 재학습을 실행하지 않았습니다.'
+                : `자동 재학습 조건을 만족하지 않았습니다. 이전 RMSE ${previousText}, 현재 RMSE ${currentText}`;
+            sections.push(
+                `<div class="alert warning"><i class="fas fa-circle-info"></i> ${reasonText}</div>`
+            );
+        }
+    }
+
+    return `<div class="status-stack">${sections.join('')}</div>`;
+}
+
+function updateGenerateReportButton() {
+    const btn = document.getElementById('generateReportBtn');
+    if (!btn) return;
+    btn.disabled = !(lastAnalysisResult && lastAnalysisResult.target_col === selectedVariable);
+}
+
+function renderReportLoading() {
+    const placeholder = document.getElementById('reportPlaceholder');
+    const meta = document.getElementById('reportMeta');
+    const output = document.getElementById('reportOutput');
+    placeholder.style.display = 'block';
+    placeholder.textContent = 'OpenAI 기반 리포트를 생성하는 중입니다...';
+    meta.style.display = 'none';
+    meta.textContent = '';
+    output.style.display = 'none';
+    output.textContent = '';
+}
+
+function renderReportPlaceholder(message) {
+    const placeholder = document.getElementById('reportPlaceholder');
+    const meta = document.getElementById('reportMeta');
+    const output = document.getElementById('reportOutput');
+    placeholder.style.display = 'block';
+    placeholder.textContent = message;
+    meta.style.display = 'none';
+    meta.textContent = '';
+    output.style.display = 'none';
+    output.textContent = '';
+}
+
+function renderReportResult(result) {
+    const placeholder = document.getElementById('reportPlaceholder');
+    const meta = document.getElementById('reportMeta');
+    const output = document.getElementById('reportOutput');
+    placeholder.style.display = 'none';
+    meta.style.display = 'block';
+    meta.textContent = `모델: ${result.model || '—'} | 생성 시각: ${result.generated_at ? new Date(result.generated_at).toLocaleString('ko-KR') : '—'}`;
+    output.style.display = 'block';
+    output.textContent = result.report_markdown || '';
+}
+
+function renderReportError(message) {
+    const placeholder = document.getElementById('reportPlaceholder');
+    const meta = document.getElementById('reportMeta');
+    const output = document.getElementById('reportOutput');
+    placeholder.style.display = 'block';
+    placeholder.textContent = message;
+    meta.style.display = 'none';
+    meta.textContent = '';
+    output.style.display = 'none';
+    output.textContent = '';
+}
+
+function applyTomAiopsResult(result) {
+    // 1) 주간 출하량 추이(실측/예측 시계열) 갱신
+    if (result.plot?.actual_series && result.plot?.pred_series && yieldChart) {
+        const a = result.plot.actual_series;
+        const p = result.plot.pred_series;
+        const labels = Array.from({ length: Math.max(a.length, p.length) }, (_, i) => `T${i + 1}`);
+
+        yieldChart.data.labels = labels;
+        yieldChart.data.datasets = [
+            {
+                label: '실측값',
+                data: a,
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37,99,235,0.08)',
+                fill: false,
+                tension: 0.35,
+                borderWidth: 2,
+                pointRadius: 2.5
+            },
+            {
+                label: '예측값',
+                data: p,
+                borderColor: '#f59e0b',
+                backgroundColor: 'rgba(245,158,11,0.08)',
+                fill: false,
+                tension: 0.35,
+                borderWidth: 2,
+                pointRadius: 2.5
+            }
+        ];
+        yieldChart.options.plugins.legend.display = true;
+        yieldChart.update();
+    }
+
+    // 2) 예측 vs 실측 편차(사분할 카드 값 기반) 갱신
+    if (result.quad_metrics && deviationChart) {
+        const qm = result.quad_metrics;
+        const signed = (x) => {
+            if (!x || x.delta == null) return 0;
+            if (x.direction === 'down') return -Number(x.delta);
+            if (x.direction === 'up') return Number(x.delta);
+            return 0;
+        };
+        const devObj = {
+            '생장길이': signed(qm['생장길이']),
+            '착과수': signed(qm['착과수']),
+            '온도': signed(qm['온도']),
+            '습도': signed(qm['습도']),
+        };
+        updateDeviationChart(devObj);
+    }
+
+    // 3) 현재 내부 환경 패널 갱신
+    if (result.quad_metrics) {
+        const q = result.quad_metrics;
+        const env = {
+            temp_in: q['온도']?.actual ?? null,
+            humid_in: q['습도']?.actual ?? null
+        };
+        updateEnvCards(env);
+    }
+}
+
+function showStatus(html) {
+    const el = document.getElementById('uploadStatus');
+    el.innerHTML = html; el.style.display = 'block';
+}
+function hideStatus() {
+    const el = document.getElementById('uploadStatus');
+    el.style.display = 'none'; el.innerHTML = '';
+}
+
+/* ── RMSE 패널 렌더 ── */
+function renderRmsePanel() {
+    // 선택 변수 기준 최신 RMSE
+    const entries = rmseHistory.filter(h => h.variable === selectedVariable);
+    const latest  = entries[entries.length - 1];
+    if (!latest) {
+        // 데이터 없음 → 빈 상태 안내
+        document.getElementById('rmseVarBadge').textContent = selectedVariable;
+        document.getElementById('rmseVarName').textContent  = 'CSV 업로드 후 표시됩니다';
+        document.getElementById('rmseVal').textContent      = '—';
+        document.getElementById('rmseUnitEl').textContent   = '';
+        document.getElementById('rmseGaugeBar').style.width = '0%';
+        document.getElementById('rmseGaugeBar').className   = 'rmse-gauge-bar good';
+        renderRetrainRmseBox();
+        renderRmseHistory();
+        return;
+    }
+
+    document.getElementById('rmseVarBadge').textContent = selectedVariable;
+    document.getElementById('rmseVarName').textContent  = selectedVariable + ' (검증 RMSE)';
+    document.getElementById('rmseVal').textContent      = latest.rmse.toFixed(4);
+    document.getElementById('rmseUnitEl').textContent   = '';
+
+    // 사용자 요청: 모델 정확도 칸에 RMSE 값 그대로 표시
+    document.getElementById('predictionsCount').textContent = latest.rmse.toFixed(4);
+
+    // 게이지는 기존처럼 RMSE 기반으로 표현(낮을수록 good)
+    const ratio = Math.min(latest.rmse / 5, 1);
+    const barWidth = Math.max(0, Math.min(100, (1 - ratio) * 100)).toFixed(0);
+    const bar = document.getElementById('rmseGaugeBar');
+    bar.style.width = barWidth + '%';
+    bar.className = 'rmse-gauge-bar ' + (ratio < 0.3 ? 'good' : ratio < 0.65 ? 'ok' : 'poor');
+
+    renderRetrainRmseBox();
+    renderRmseHistory();
+}
+
+function renderRetrainRmseBox() {
+    const box = document.getElementById('retrainRmseBox');
+    const valueEl = document.getElementById('retrainRmseVal');
+    const unitEl = document.getElementById('retrainRmseUnitEl');
+    const descEl = document.getElementById('retrainRmseDesc');
+    const info = retrainRmseByVariable[selectedVariable];
+
+    if (!info || !Number.isFinite(info.retrainedRmse)) {
+        box.style.display = 'none';
+        valueEl.textContent = '—';
+        unitEl.textContent = '';
+        descEl.textContent = '';
+        return;
+    }
+
+    const previousText = Number.isFinite(info.previousRmse) ? info.previousRmse.toFixed(4) : '—';
+    const currentText = Number.isFinite(info.currentRmse) ? info.currentRmse.toFixed(4) : '—';
+    const trainedAtText = info.trainedAt ? new Date(info.trainedAt).toLocaleString('ko-KR') : '방금';
+
+    valueEl.textContent = info.retrainedRmse.toFixed(4);
+    unitEl.textContent = '';
+    descEl.textContent = `이전 RMSE ${previousText}, 현재 RMSE ${currentText} 기준으로 자동 재학습이 실행되었습니다. 재학습 시각: ${trainedAtText}`;
+    box.style.display = 'block';
+}
+
+function renderRmseHistory() {
+    const tbody = document.getElementById('rmseHistoryBody');
+    if (rmseHistory.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:14px 0;">
+            아직 업로드 이력이 없습니다.</td></tr>`;
+        return;
+    }
+    const allVals = rmseHistory.map(e => Number(e.rmse)).filter(v => Number.isFinite(v));
+    const minV = Math.min(...allVals);
+    const maxV = Math.max(...allVals);
+
+    // 최신순 정렬
+    const sorted = [...rmseHistory].reverse();
+    tbody.innerHTML = sorted.map((h, i) => {
+        const rv = Number(h.rmse);
+        let acc = 100;
+        if (allVals.length > 1 && maxV > minV) {
+            acc = (1 - ((rv - minV) / (maxV - minV))) * 100;
+        }
+        acc = Math.max(0, Math.min(100, acc));
+        const grade = acc >= 80 ? 'good' : acc >= 50 ? 'ok' : 'poor';
+        const gradeLabel = grade === 'good' ? '우수' : grade === 'ok' ? '보통' : '개선 필요';
+        const t = h.time;
+        const timeStr = `${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}`;
+        const isSelected = h.variable === selectedVariable;
+        return `<tr style="${isSelected ? 'background:#fafafa;' : ''}">
+            <td style="color:#94a3b8;font-size:12px;">${sorted.length - i}</td>
+            <td style="font-weight:${isSelected?'700':'400'};color:${isSelected?'#166534':'#334155'};">${h.variable}</td>
+            <td style="font-weight:700;">${h.rmse.toFixed(4)}</td>
+            <td><span class="rmse-badge ${grade}">${gradeLabel}</span></td>
+            <td style="color:#94a3b8;font-size:12px;">${timeStr}</td>
+        </tr>`;
+    }).join('');
+}
+
+function updateEnvCards(env) {
+    if (!env) return;
+    if (env.temp_in != null) {
+        const t = Number(env.temp_in);
+        const t1 = Number.isFinite(t) ? t.toFixed(1) : env.temp_in;
+        // 헤더 상태 박스
+        document.getElementById('statusTempIn').textContent = `${t1}°C`;
+        // 3번 패널
+        document.getElementById('panelTempVal').textContent = t1;
+        document.getElementById('panelTempBar').style.width = Math.min((Number(t1) / 50) * 100, 100).toFixed(1) + '%';
+    }
+    if (env.humid_in != null) {
+        const h = Number(env.humid_in);
+        const h1 = Number.isFinite(h) ? h.toFixed(1) : env.humid_in;
+        document.getElementById('statusHumidIn').textContent = `${h1}%`;
+        document.getElementById('panelHumidVal').textContent = h1;
+        document.getElementById('panelHumidBar').style.width = Math.min(Number(h1), 100).toFixed(1) + '%';
+    }
+}
+
+function updateDeviationChart(devObj) {
+    if (!deviationChart || !devObj) return;
+    const labels = Object.keys(devObj), data = Object.values(devObj);
+    deviationChart.data.labels = labels;
+    deviationChart.data.datasets[0].data = data;
+    deviationChart.data.datasets[0].backgroundColor = data.map(v => v >= 0 ? 'rgba(34,197,94,0.72)' : 'rgba(239,68,68,0.72)');
+    deviationChart.data.datasets[0].borderColor      = data.map(v => v >= 0 ? '#16a34a' : '#dc2626');
+    deviationChart.update();
+}
+
+function updateStatus() {
+    // 모델 정확도는 renderRmsePanel()에서만 갱신
+}
+
+function initCharts() {
+    const base = {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{ display:false } },
+        scales:{ x:{ grid:{ display:false } }, y:{ border:{ display:false } } }
+    };
+    yieldChart = new Chart(document.getElementById('yieldChart').getContext('2d'), {
+        type:'line',
+        data:{ labels:['W1','W2','W3','W4','W5'], datasets:[{
+            data:[0,0,0,0,0], borderColor:'#2563eb',
+            backgroundColor:'rgba(37,99,235,0.06)',
+            fill:true, tension:0.4, borderWidth:2, pointRadius:3
+        }]},
+        options:base
+    });
+    const devData=[1.8,-2.3,0.5,-1.1,0.9,-0.4], devLabels=['생장길이','착과수','초장','엽장','엽폭','줄기굵기'];
+    deviationChart = new Chart(document.getElementById('deviationChart').getContext('2d'), {
+        type:'bar',
+        data:{ labels:devLabels, datasets:[{
+            data:devData,
+            backgroundColor:devData.map(v=>v>=0?'rgba(34,197,94,0.72)':'rgba(239,68,68,0.72)'),
+            borderColor:devData.map(v=>v>=0?'#16a34a':'#dc2626'),
+            borderWidth:1.5, borderRadius:4
+        }]},
+        options:{
+            indexAxis:'y', responsive:true, maintainAspectRatio:false,
+            plugins:{ legend:{ display:false },
+                tooltip:{ callbacks:{ label:ctx=>{
+                    const v=ctx.raw; return `${v>0?'+':''}${v.toFixed(1)} (${v>0?'과다예측':'과소예측'})`;
+                }}}
+            },
+            scales:{
+                x:{ grid:{ color:'#f1f5f9' }, border:{ display:false },
+                    ticks:{ callback:v=>(v>0?'+':'')+v } },
+                y:{ grid:{ display:false } }
+            }
+        }
+    });
+}
+
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => {
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if (f) handleFileUpload({ target:{ files:[f], value:'' } });
+});
+
+window.addEventListener('load', async () => {
+    await loadSupportedTargets();
+    initCharts();
+    renderRmsePanel();   // 초기 빈 상태 렌더
+    updateGenerateReportButton();
+});
+</script>
+</body>
+</html>
